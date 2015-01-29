@@ -1,5 +1,5 @@
 # cf-test-app
-CF-deployable app to test service interactions
+CF-deployable app to test S3-compatible blobstore using both fog and aws-s3 gems
 
 ## Deploying
 `cf push -m 256M --no-start cf-test-app`
@@ -8,34 +8,14 @@ CF-deployable app to test service interactions
 `cf start cf-test-app`
 
 
-### Endpoints
+## Endpoints
 
-#### GET /crud_test
+### GET /service/blobstore/awss3client/test/:service_name
+Creates, reads, and deletes a value from a file IO stream in blobstore using aws-s3 gem.  Example:
 
-#### PUT /:key
+    $ curl cf-test-app.my-cloud-foundry.com/service/blobstore/awss3client/test/cf-riakcs-test
 
-Stores the key:value pair in the Riak CS bucket. Example:
+### GET /service/blobstore/fogclient/test/:service_name
+Creates, reads, and deletes a value in blobstore using fog gem.  Example:
 
-    $ curl -X POST riaktest.my-cloud-foundry.com/service/blobstore/mybucket/foo -d 'bar'
-    success
-
-
-#### GET /:key
-
-Returns the value stored in the Riak CS bucket for a specified key. Example:
-
-    $ curl -X GET riaktest.my-cloud-foundry.com/service/blobstore/mybucket/foo
-    bar
-
-#### DELETE /:key
-
-Deletes the bucket. Example:
-
-    $ curl -X DELETE riaktest.my-cloud-foundry.com/service/blobstore/mybucket
-    success
-
-Once you've deleted your bucket, you should unbind and delete the service instance, as these are references in Cloud Foundry to an instance which no longer exists.
-
-    $ cf unbind-service riaktest mybucket
-    $ cf delete-service mybucket
-    $ cf restart riaktest
+    $ curl cf-test-app.my-cloud-foundry.com/service/blobstore/fogclient/test/cf-riakcs-test
