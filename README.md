@@ -2,10 +2,10 @@
 CF-deployable app to test S3-compatible blobstore using both fog and aws-s3 gems
 
 ## Deploying
-`cf push -m 256M --no-start cf-test-app`
-`cf create-service p-riakcs developer cf-riakcs-test`
-`cf bind-service cf-test-app cf-riakcs-test`
-`cf start cf-test-app`
+* `cf push -m 256M --no-start cf-test-app`
+* `cf create-service p-riakcs developer cf-riakcs-test`
+* `cf bind-service cf-test-app cf-riakcs-test`
+* `cf start cf-test-app`
 
 
 ## Endpoints
