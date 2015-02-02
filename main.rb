@@ -67,17 +67,20 @@ end
 # Using fog client
 
 get '/service/blobstore/fogclient/test/:service_name' do
-  random = Random.rand(1..9999999).to_s
-  key = "smoke_test_key_#{random}"
-  value = "smoke_test_value_#{random}"
-  results = {}
-  results[:create] = do_create(key, value)
-  results[:read] = do_read(key)
-  unless results[:create] == results[:read]
-    raise "Value read was not the same as value created: #{results.inspect}"
+  do_create(blobstore_test_data.key, File.open(blobstore_test_data.file_path))
+
+  read_value = do_read(blobstore_test_data.key)
+  unless read_value == blobstore_test_data.file_text
+    raise "Value read was not the same as value created: #{read_value}, #{blobstore_test_data.file_text}"
   end
-  results[:delete] = do_delete(key)
-  results.to_s
+
+  do_delete(blobstore_test_data.key)
+  read_value = do_read(blobstore_test_data.key)
+  unless read_value == nil
+    raise "Key `#{blobstore_test_data.key}` was not deleted"
+  end
+
+  "successful test for setting #{blobstore_test_data.key} to #{blobstore_test_data.file_text}"
 end
 
 post '/service/blobstore/fogclient/:service_name/:key' do
@@ -90,23 +93,13 @@ get '/service/blobstore/fogclient/:service_name/:key' do
   do_read
 end
 
-delete '/service/blobstore/fogclient/:service_name' do
+delete '/service/blobstore/fogclient/:service_name/:key' do
   do_delete
 end
 
 # Using aws-s3 client
 
 get '/service/blobstore/awss3client/test/:service_name' do
-  random = Random.rand(1..9999999).to_s
-  value = "smoke_test_value_#{random}"
-  tmpfile = Tempfile.new('dummy-attachment.txt')
-  tmpfile << value
-  tmpfile.close
-  key = "smoke_test_key#{tmpfile.path}"
-
-  raise "unable to create tempfile" unless key
-
-
   uri = URI(service.fetch('uri'))
   access_key = service.fetch('access_key_id')
   secret = service.fetch('secret_access_key')
@@ -123,32 +116,54 @@ get '/service/blobstore/awss3client/test/:service_name' do
   AWS::S3::Base.establish_connection!(aws_s3_options)
 
   AWS::S3::S3Object.store(
-      key,
-      File.open(tmpfile.path),
+      blobstore_test_data.key,
+      File.open(blobstore_test_data.file_path),
       bucket_name,
-      :content_type => 'text/plain',
+      content_type: 'text/plain',
   )
 
-  read_value = AWS::S3::S3Object.find(key, bucket_name).value
-  unless read_value == value
-    raise "Value read was not the same as value created: #{read_value}, #{value}"
+  read_value = AWS::S3::S3Object.find(blobstore_test_data.key, bucket_name).value
+  unless read_value == blobstore_test_data.file_text
+    raise "Value read was not the same as value created: #{read_value}, #{blobstore_test_data.file_text}"
   end
 
-  AWS::S3::S3Object.delete key, bucket_name
+  AWS::S3::S3Object.delete(blobstore_test_data.key, bucket_name)
+  expected_error = nil
+  begin
+    AWS::S3::S3Object.find(blobstore_test_data.key, bucket_name)
+  rescue AWS::S3::NoSuchKey => expected_error
+    # we expect this error if the blob was successfully deleted
+  end
+  raise "Key `#{blobstore_test_data.key}` was not deleted" unless expected_error
 
-  "successful test for setting #{key} to #{value}"
+  "successful test for setting #{blobstore_test_data.key} to #{blobstore_test_data.file_text}"
 end
 
 
 private
 
+def blobstore_test_data
+  return @blobstore_entry if @blobstore_entry
+  random = Random.rand(1..9999999).to_s
+  value = "smoke_test_value_#{random}"
+  tmpfile = Tempfile.new('dummy-attachment.txt')
+  tmpfile << value
+  tmpfile.close
+  key = "smoke_test_key#{tmpfile.path}"
+
+  raise "unable to create tempfile" unless key
+
+  require 'ostruct'
+  @blobstore_entry = OpenStruct.new(key: key, file_text: value, file_path: tmpfile.path)
+end
+
 def do_create(key, value)
   bucket = client.directories.get(bucket_name)
 
   bucket.files.create(
-  key: key,
-  body: value,
-  public: true
+      key: key,
+      body: value,
+      public: true
   )
 
   value
@@ -157,7 +172,9 @@ end
 def do_read(key = nil)
   key ||= params.fetch('key')
   bucket = client.directories.get(bucket_name)
-  bucket.files.get(key).body
+  blob = bucket.files.get(key)
+  return nil unless blob
+  blob.body
 end
 
 def do_delete(key = nil)
