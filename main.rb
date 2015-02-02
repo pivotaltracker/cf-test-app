@@ -4,6 +4,8 @@ require 'bundler'
 require 'fog'
 require 'aws/s3'
 
+Bundler.require
+
 # Monkey-patch AWS gem to work with RiakCS
 module AWS
   module S3
@@ -25,11 +27,30 @@ module AWS
   end
 end
 
-Bundler.require
+# Monkey-patch Net::HTTP to get debug output (aws-s3 uses net/http)
+require 'net/http'
 
+Net::HTTP.module_eval do
+  alias_method '__initialize__', 'initialize'
+
+  def initialize(*args,&block)
+    __initialize__(*args, &block)
+  ensure
+    @debug_output = $stderr ### if ENV['HTTP_DEBUG']
+  end
+end
+
+# enable debugging for Fog (fog uses excon) (yes they both have to be set)
+$VERBOSE = true
+ENV['EXCON_DEBUG'] = 'true'
+
+# Ignore self-signed cert errors
 Excon.defaults[:ssl_verify_peer] = false
+
 class ServiceUnavailableError < StandardError;
 end
+
+# Sinatra app begin
 
 after do
   headers['Services-Nyet-App'] = 'true'
